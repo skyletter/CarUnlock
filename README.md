@@ -1,109 +1,116 @@
-# CarUnlock — 车机音源解锁
+# CarUnlock
 
-解决**长安 C211 平台车机**上第三方播放器（AntennaPod / 喜马拉雅等）**启动播放无声**的问题。
+**长安 C211 平台车机 —— 第三方播放器无声修复**
+
+装好即用，开机自动解除功放静音。AntennaPod、喜马拉雅、QQ 音乐等第三方播放器再也不用先开一次酷我才有声音。
 
 ---
 
-## 原理
+## 你遇到的是这个问题吗？
 
-车机的音频通路采用**音源仲裁**模型。开机后音源状态未初始化：
+如果你的车机符合以下现象，本工具就是为你准备的：
+
+| 现象 | 说明 |
+|---|---|
+| 第三方播放器显示在播放，但**扬声器没声音** | AntennaPod / 喜马拉雅 / QQ 音乐等 |
+| **车机自带的酷我、网易云有声音** | 高德导航也有声音 |
+| **先打开一次自带音乐（酷我），再开第三方播放器就有声了** | 经典的"土办法" |
+| 点击暂停再播放**没用** | |
+| **每次开机都会复现** | |
+
+如果你全中，那这**不是播放器的问题**，是车机的音频通道机制问题 —— 继续往下看。
+
+---
+
+## 适用范围
+
+- **长安汽车 inCall / Coagent C211 平台车机**（全志 T7，Android 9）
+  - 常见车型：二代逸动、逸动 PLUS（早期）、CS75 / CS55 / CS95、锐程系列、UNI 系列（早期）等
+- 判断方法：车机 **设置 → 系统升级** 里的版本号以 `OS_C211-...` 或 `OS_CA...` 开头
+- **不确定也没关系** —— 只要症状匹配（见上表）就能试，装了没效果卸载即可，不会影响车机
+
+> 这不是长安独有。任何采用「音源仲裁 + 应用白名单」设计的车机都可能有类似问题。
+
+---
+
+## 为什么会有这个问题
+
+车机的音频通路采用**音源仲裁**机制，由车机 MCU 统一管控「当前音源」。开机后音源状态是**未初始化**的：
 
 ```
 mCurrentSource = null      音源为空
 mCurrentMainSrc = -1       主音源未设置
 ```
 
-此时音频数据虽然正常写入了声卡、功放也处于 unmute，但**主音源没选中，通路没建立** → 无声。
+此时音频数据虽然正常写进了声卡、功放也处于开启状态，但**主音源没被选中，通路没建立** → 无声。
 
-车机预置的适配应用（酷我、网易云车机版）会通过音源仲裁服务注册音源，第三方通用 App 不会 —— 这就是"先打开酷我才有声音"的原因。
+车机自带的适配应用（酷我、网易云车机版）启动时会通过车机的音源服务**注册音源**，第三方通用播放器不会 —— 所以"先打开酷我"有用。
 
-**本应用做的事，就是调用车机自己的音源仲裁接口，请求 APP 音源：**
+**CarUnlock 做的事，就是直接调用车机自己的音源仲裁接口：**
 
 ```
 requestSource("app")
   → switchChannel From = null to = APP
   → AudioControlDsp: >>set source 1 , enable 1
-  → dealWithAMPSwitch ... mCurrentMainSrc 1 → amp unmute
+  → dealWithAMPSwitch ... mCurrentMainSrc 1 → it set to amp unmute
 ```
 
 ---
 
-## 技术要求
+## 安装
 
-| 项 | 值 |
-|---|---|
-| 目标服务 | `fce_misc_service_source_ctrl` |
-| AIDL | `com.fce.misc.proxy.source.ISourceCtrl` |
-| 方法 | `requestSource(String sourceId)`，事务码 **1** |
-| 有效音源标识 | `app`（目标）/ `navi` / `usb` |
-| 调用权限 | 实测 root 与非 root shell 均可，**无需 root** |
+### 方式一：下载现成 APK
 
-调用方式：**反射 `ServiceManager` 取 IBinder 后直接 `transact`**，不需要引入车机 AIDL 文件。
+到 [Releases](https://github.com/skyletter/CarUnlock/releases) 下载最新的 `app-debug.apk`，用 U 盘或 adb 安装：
 
-若 Binder 路线被权限拦截，应用会自动回退到 root 方式执行 `service call`。
+```sh
+adb install -r app-debug.apk
+```
 
----
+> 车机若拦截安装，可把 APK 放到 U 盘，用车机自带文件管理器打开安装。
 
-## 构建
+### 方式二：自己构建
 
-本机无需安装 Android SDK，用 GitHub Actions 云构建：
+本工程用 GitHub Actions 云构建，本地无需装 Android SDK：
 
-1. 把 `carunlock/` 目录推到一个 GitHub 仓库
+1. Fork 本仓库
 2. Actions 会自动运行（或手动触发 `workflow_dispatch`）
-3. 构建完成后在 Artifacts 里下载 `CarUnlock-debug`（内含 `app-debug.apk`）
+3. 在 Artifacts 里下载 `CarUnlock-debug`
 
 ---
 
-## 安装与配置
+## 使用
 
-### 1. 安装 APK
+**装完就完事了。**
 
-```sh
-ADB=D:/Green/platform-tools/adb.exe
-$ADB install -r app-debug.apk
-```
+- 应用**没有界面**，点图标也不会弹出任何窗口
+- 开机后自动在后台完成解锁，**不需要任何手动操作**
+- 解锁完成后进程自动退出，不常驻、不弹通知、不申请多余权限
 
-> 若车机拦截安装，可先把 APK 放到 `/sdcard`，再用 `pm install` 装。
-
-### 2. 加入开机自启列表
-
-车机自带 **Auto Start（`com.autostart`，Auto Start 2.2）** 管理开机自启：
-
-1. 在车机应用列表里找到 **Auto Start** 并打开
-2. 把 **CarUnlock** 加入自启列表
-3. 重启车机验证
-
-### 3. 手动测试一次
-
-装好后点一下 CarUnlock 图标即可触发解锁。
-
-应用**没有界面**：`MainActivity` 使用 `Theme.NoDisplay`（无窗口），拿到 Service 后立即 `finish()`，用户看不到任何东西；实际解锁在 `UnlockService` 后台执行，做完 `stopSelf()` 自毁。不常驻、不弹通知、不申请多余权限。
-
-> **实现注意**：`Theme.NoDisplay` 的 Activity 必须在 `onResume` 完成前调用 `finish()`，否则系统会抛 `IllegalStateException` 并强杀进程。所以解锁逻辑不能放在 Activity 里，必须由 Service 承载。
+**自带开机自启，不依赖任何第三方自启工具**（应用内注册了 `BOOT_COMPLETED` 广播）。
 
 ---
 
-## 验证
+## 验证是否生效
 
-播放 AntennaPod，然后查看日志：
+播放第三方播放器，然后在电脑上用 adb 看日志：
 
 ```sh
-ADB=D:/Green/platform-tools/adb.exe
-
 # 应用自身日志
-$ADB shell "su 0 logcat -d -v time | grep CarUnlock"
+adb shell "su 0 logcat -d -v time | grep CarUnlock"
 
 # 车机音源链路日志
-$ADB shell "su 0 logcat -d -v time | grep -E 'SwitchSource|switchChannel|mCurrentMainSrc|it set to amp'"
+adb shell "su 0 logcat -d -v time | grep -E 'switchChannel|mCurrentMainSrc|set to amp'"
 ```
 
 **期望看到：**
 
 ```
+CarUnlock: 收到开机广播: android.intent.action.BOOT_COMPLETED
+CarUnlock: 已启动解锁服务
 CarUnlock: attempt 1: requestSource("app") -> 1
-CarUnlock: 解锁成功(音源已切换到 app)
+CarUnlock: 解锁完成(返回值 1)
 
-MiscUtils---SwitchSource: requestSource  Source = APP mCurrentSource = null
 MiscUtils---SourceConfig: switchChannel From = null to = APP
 AudioControlDsp: >>set source 1 , enable 1
 AudioControlDsp: dealWithAMPSwitch ... mCurrentMainSrc 1 → it set to amp unmute
@@ -111,42 +118,85 @@ AudioControlDsp: dealWithAMPSwitch ... mCurrentMainSrc 1 → it set to amp unmut
 
 ---
 
-## 也可以不用 APK：直接跑命令
+## 不想装应用？直接跑命令也行
 
-如果只想手动解锁（或排查问题），一条命令即可，**无需 root**：
+用 adb（**无需 root**）：
 
 ```sh
-$ADB shell 'service call fce_misc_service_source_ctrl 1 s16 "app"'
+adb shell 'service call fce_misc_service_source_ctrl 1 s16 "app"'
 ```
 
-脚本版见同目录 `../audio-unlock.sh`。
+其他可用音源：
 
-**为什么不直接把脚本设成开机自启？** 因为这台车机：
+| 参数 | 含义 |
+|---|---|
+| `app` | 第三方应用媒体源（目标） |
+| `navi` | 导航 |
+| `usb` | 本地 U 盘 |
 
-- 没有 Magisk（`/data/adb` 为空）
-- 没有 init.d
-- `/system`、`/vendor` 均为只读挂载
+---
 
-而车机的自启动管理器 **只认应用**。所以 APK 是唯一无需改动系统分区就能开机自启的载体。
+## 技术细节
+
+<details>
+<summary>接口与实现（点开）</summary>
+
+### 目标接口
+
+| 项 | 值 |
+|---|---|
+| 服务名 | `fce_misc_service_source_ctrl` |
+| AIDL | `com.fce.misc.proxy.source.ISourceCtrl` |
+| 服务端实现 | `com.fce.misc.service.source.SourceCtrlImpl` |
+| 所属 APK | `/system/priv-app/FCEMiscService/FCEMiscService.apk` |
+| 方法 | `requestSource(String sourceId)`，事务码 **1** |
+
+### 实现要点
+
+- 用**反射 `ServiceManager` 取 IBinder 后直接 `transact`**，不需要引入车机 AIDL 文件
+- `targetSdk 28` —— 避开 Android 9 的 hidden API 限制
+- 接口**幂等**：音源已是 `app` 时返回 `false`，此时说明已解锁，直接视为完成
+- 权限：实测 **root 与非 root 均可**，普通应用通过 Binder 调用即可，**不需要 root**
+- 失败时自动回退到 root 方式执行 `service call`（若设备已 root）
+
+### 开发注意
+
+- `Theme.NoDisplay` 的 Activity **必须在 `onResume` 完成前 `finish()`**，否则系统抛 `IllegalStateException` 并强杀进程。所以解锁逻辑放在 `UnlockService`，Activity 只负责转发。
+- 应用内用 `sRunning` 静态标志防止被多个入口重复拉起时跑两份任务。
+
+</details>
 
 ---
 
 ## 排障
 
-| 现象 | 排查 |
+| 现象 | 处理 |
 |---|---|
-| `服务未就绪` 反复出现 | 车机音频服务启动较慢，应用已内置 6 次重试、每次间隔 5 秒 |
-| `transact 失败: SecurityException` | 说明服务对普通应用做了权限检查，此时会走 root 兜底。请确认车机已 root |
-| 日志显示返回 `0` | 可能是幂等（音源已是 app，属正常）也可能是失败。可看车机侧 `switchChannel` 日志确认 |
-| 装完开机仍无声 | 检查 Auto Start 里是否已把 CarUnlock 勾选；或增大 `FIRST_DELAY_MS` |
-| 想顺便解锁导航音源 | 把 `TARGET_SOURCE` 改成 `navi`，或多次调用不同音源 |
+| 装了没效果 | 先按上面「验证」章节看日志。若 `requestSource -> 1` 但依然无声，说明不是同一个问题，欢迎开 issue 附日志 |
+| 日志里 `服务未就绪` | 音频服务启动较慢，应用内置 6 次重试（首次等 8 秒） |
+| 安装报签名冲突 | 先 `adb uninstall com.leo.carunlock` 再装 |
+| 想改解锁的音源 | 修改 `UnlockService.java` 里的 `TARGET_SOURCE` 常量，重新构建 |
 
 ---
 
-## 相关文件
+## 免责声明
 
-| 文件 | 说明 |
-|---|---|
-| `../音源解锁方案.md` | 完整的接口分析、事务码映射、实测证据 |
-| `../audio-unlock.sh` | shell 版解锁脚本 |
-| `../车机音频无声-排障报告.md` | 完整排障过程 |
+本项目通过调用车机**自带的音频控制接口**实现功能，不修改系统分区、不刷机、不 root。
+
+但车机系统版本众多，**请自行评估风险**。作者不对因使用本工具造成的任何车辆问题负责。
+
+建议安装前备份重要数据。
+
+---
+
+## 相关背景
+
+这个问题的社区记录可以追溯到 2015 年（老逸动车主装第三方播放器无声）。长安车机工具箱（CABOX）官方 FAQ 也记载了同样症状，给出的方案是"用自启动打开自带音乐" —— 治标不治本。
+
+**CarUnlock 是第一个直接调用音源仲裁接口、从机制上解决该问题的方案。**
+
+---
+
+## License
+
+MIT
