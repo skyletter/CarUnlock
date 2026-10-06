@@ -10,7 +10,10 @@ import android.util.Log;
  *
  * 车机的 com.autostart(Auto Start 2.2)本身会拉起 App 的启动 Activity,
  * 这里再加一层保险:直接监听 BOOT_COMPLETED。
- * 两条路径都会走 MainActivity 的解锁逻辑,重复调用无害(接口幂等)。
+ *
+ * 只负责拉起 MainActivity(它启动 Service 后立即结束),
+ * 不走直接 startService —— 因为 Android 8+ 限制从广播启动后台服务。
+ * 两条路径重复触发无害(接口幂等)。
  */
 public class BootReceiver extends BroadcastReceiver {
 
@@ -26,7 +29,7 @@ public class BootReceiver extends BroadcastReceiver {
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(launch);
         } catch (Throwable t) {
-            Log.e(TAG, "启动 MainActivity 失败: " + t);
+            Log.e(TAG, "拉起 MainActivity 失败: " + t);
         }
     }
 }
