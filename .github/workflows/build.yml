@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -27,9 +30,53 @@ jobs:
       - name: Build debug APK
         run: gradle assembleDebug --no-daemon
 
-      - name: Upload APK
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/debug/app-debug.apk out/CarUnlock-v1.0.apk
+          ls -l out/
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: CarUnlock-debug
-          path: app/build/outputs/apk/debug/*.apk
+          path: out/*.apk
           if-no-files-found: error
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0
+          name: v1.0 — 首个版本
+          files: out/CarUnlock-v1.0.apk
+          body: |
+            长安 C211 平台车机 —— 第三方播放器无声修复。
+
+            ## 解决的症状
+
+            - 第三方播放器（AntennaPod / 喜马拉雅 / QQ 音乐等）显示播放中但**扬声器无声**
+            - 车机自带的酷我、网易云**有声音**
+            - **先打开一次酷我，第三方播放器就有声**（经典土办法）
+            - 点击暂停再播放没用，**每次开机复现**
+
+            ## 使用方法
+
+            1. 下载下面的 `CarUnlock-v1.0.apk` 并安装
+            2. 重启车机
+            3. 完成 —— 无需任何配置
+
+            应用**没有界面**，自带开机自启，安装后自动生效。不常驻、不弹通知、不需要 root。
+
+            ## 适用范围
+
+            长安 inCall / Coagent C211 平台车机（全志 T7，Android 9）
+            版本号以 `OS_C211-` 或 `OS_CA` 开头（车机设置 → 系统升级 里查看）
+
+            ## 原理
+
+            调用车机自带的音源仲裁接口 `requestSource("app")`，触发音源注册、解除功放静音。
+            不修改系统分区、不刷机、不需要 root。
+
+            详见 README。
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
