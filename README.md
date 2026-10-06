@@ -75,7 +75,11 @@ $ADB install -r app-debug.apk
 
 ### 3. 手动测试一次
 
-装好后点一下 CarUnlock 图标即可触发解锁（应用是静默执行的，不显示界面，45 秒后自动关闭）。
+装好后点一下 CarUnlock 图标即可触发解锁。
+
+应用**没有界面**：`MainActivity` 使用 `Theme.NoDisplay`（无窗口），拿到 Service 后立即 `finish()`，用户看不到任何东西；实际解锁在 `UnlockService` 后台执行，做完 `stopSelf()` 自毁。不常驻、不弹通知、不申请多余权限。
+
+> **实现注意**：`Theme.NoDisplay` 的 Activity 必须在 `onResume` 完成前调用 `finish()`，否则系统会抛 `IllegalStateException` 并强杀进程。所以解锁逻辑不能放在 Activity 里，必须由 Service 承载。
 
 ---
 

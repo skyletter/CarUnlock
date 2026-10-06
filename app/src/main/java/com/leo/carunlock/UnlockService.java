@@ -31,14 +31,24 @@ public class UnlockService extends Service {
     private static final long RETRY_DELAY_MS = 5000L;
     private static final int MAX_ATTEMPTS = 6;
 
+    /** 防止被多个入口(BootReceiver / Auto Start)重复拉起时跑多份任务 */
+    private static volatile boolean sRunning = false;
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (sRunning) {
+            Log.i(TAG, "已有解锁任务在运行,跳过本次");
+            return START_NOT_STICKY;
+        }
+        sRunning = true;
+
         Thread worker = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
                     unlock();
                 } finally {
+                    sRunning = false;
                     stopSelf();
                 }
             }
@@ -66,20 +76,19 @@ public class UnlockService extends Service {
             int ret = callRequestSource(binder, TARGET_SOURCE);
             Log.i(TAG, "attempt " + attempt + ": requestSource(\"" + TARGET_SOURCE + "\") -> " + ret);
 
-            if (ret == 1) {
-                Log.i(TAG, "解锁成功(音源已切换到 " + TARGET_SOURCE + ")");
-                return;
-            }
             if (ret == -1) {
                 Log.w(TAG, "Binder 调用异常,改用 root 兜底");
                 rootFallback();
                 return;
             }
-            // ret == 0:切换失败或幂等(音源已是 app),继续重试
+
+            // ret == 1:完成切换
+            // ret == 0:音源已是目标值 —— 幂等返回,同样表示已就绪,不是失败
+            Log.i(TAG, "解锁完成(返回值 " + ret + (ret == 0 ? ",音源已是 " + TARGET_SOURCE : "") + ")");
+            return;
         }
 
-        Log.w(TAG, "Binder 路线未成功,尝试 root 兜底");
-        rootFallback();
+        Log.w(TAG, "服务始终未就绪,放弃");
     }
 
     private IBinder getServiceBinder() {
