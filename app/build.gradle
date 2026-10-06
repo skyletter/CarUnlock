@@ -1,0 +1,40 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.leo.carunlock'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.leo.carunlock"
+        minSdk 21
+        targetSdk 28          // 保持 28:Android 9 上反射 ServiceManager 不受 hidden API 限制
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+            // 用 debug 签名,便于车机直接安装
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+}
